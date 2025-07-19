@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "module": "NodeNext",            // keep
+    "moduleResolution": "NodeNext",
+    "target": "ES2020",
+    "esModuleInterop": true,         // ← add
+    "allowSyntheticDefaultImports": true,
+    /* …rest… */
+  }
+}
