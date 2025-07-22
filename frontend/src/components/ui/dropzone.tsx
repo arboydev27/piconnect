@@ -29,6 +29,7 @@ export default function Dropzone({
   const [isHovering, setIsHovering] = useState(false);
   const [multiMode, setMultiMode] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
 
   /* ─ Helpers ─ */
   const appendFiles = useCallback(
@@ -55,13 +56,50 @@ export default function Dropzone({
     );
 
   /* ─ Upload all (fake) ─ */
-  const uploadAll = () => {
-    setQueue((prev) =>
-      prev.map((q) => ({
-        ...q,
-        uploaded: true,
-      }))
-    );
+  // const uploadAll = () => {
+  //   setQueue((prev) =>
+  //     prev.map((q) => ({
+  //       ...q,
+  //       uploaded: true,
+  //     }))
+  //   );
+  // };
+  const handleUpload = async () => {
+    if (!queue.length) return;
+
+    const form = new FormData();
+    form.append("file", queue[0].file);
+
+    // ① POST file to backend (/api/upload)
+
+    const res = await fetch("/api/upload", {
+      method: "POST",
+      body: form,
+    });
+
+    if (res.ok) {
+      const { file } = await res.json();
+
+      // ② POST metadata to backend (/api/resources) meaning to database
+      await fetch("/api/resources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: file,
+          title: queue[0].title,
+          description: queue[0].description,
+          types: queue[0].types,
+        }),
+      });
+
+      setUploadSuccess(true);
+      // flag the first file in the queue as uploaded
+      setQueue((prev) =>
+        prev.map((q, i) => (i === 0 ? { ...q, uploaded: true } : q))
+      );
+    } else {
+      console.error(await res.text());
+    }
   };
 
   /* ─ View ─ */
@@ -198,18 +236,20 @@ export default function Dropzone({
         {/* Upload all & back to single */}
         <div className="mt-4 flex gap-4">
           <button
-            onClick={uploadAll}
+            onClick={handleUpload}
             disabled={queue.length === 0}
             className={`flex-1 rounded-lg py-2 text-white ${
               queue.length === 0
-                ? "bg-gray-400 cursor-not-allowed" /* disabled */
-                : queue.every((q) => q.uploaded) /* all done */
+                ? "bg-gray-400 cursor-not-allowed"
+                : uploadSuccess || queue.every((q) => q.uploaded)
                 ? "bg-green-500"
                 : "bg-blue-600 hover:bg-blue-700" /* ready */
             }`}
             type="button"
           >
-            {queue.every((q) => q.uploaded) ? "All Uploaded" : "Upload All"}
+            {uploadSuccess || queue.every((q) => q.uploaded)
+              ? "All Uploaded"
+              : "Upload All"}
           </button>
 
           <button
@@ -305,18 +345,18 @@ export default function Dropzone({
           <button
             type="button"
             onClick={() => {
-              uploadAll();
+              handleUpload();
             }}
-            disabled={queue.length === 0 || (queue[0] && queue[0].uploaded)}
+            disabled={queue.length === 0 || uploadSuccess}
             className={`mt-4 w-full rounded-lg px-4 py-2 text-white ${
               queue.length === 0
                 ? "bg-gray-400 cursor-not-allowed" /* disabled */
-                : queue[0]?.uploaded /* success */
+                : uploadSuccess /* success */
                 ? "bg-green-500"
                 : "bg-blue-600 hover:bg-blue-700" /* ready */
             }`}
           >
-            {queue.length > 0 && queue[0].uploaded ? "Uploaded" : "Upload"}
+            {uploadSuccess ? "Uploaded" : "Upload"}
           </button>
         </div>
 

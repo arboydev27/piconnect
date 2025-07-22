@@ -8,3 +8,5 @@ export const db = new Database(join(__dirname, "db.sqlite3"));
 export const run = (sql: string, ...p: unknown[]) => db.prepare(sql).run(...p);
 export const all = <T>(sql: string, ...p: unknown[]) =>
   db.prepare(sql).all(...p) as T[];
+export const get = <T>(sql: string, ...p: unknown[]) =>
+  db.prepare(sql).get(...p) as T | undefined;

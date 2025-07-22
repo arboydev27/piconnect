@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 
 interface ProfileSetupProps {
-  onProfileSetup: (name: string) => void;
+  onProfileSetup: (name: string) => void | Promise<void>;
 }
 
 export default function ProfileSetup({ onProfileSetup }: ProfileSetupProps) {
@@ -22,9 +22,8 @@ export default function ProfileSetup({ onProfileSetup }: ProfileSetupProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (name.trim()) {
-      onProfileSetup(name.trim());
-    }
+    if (!name.trim()) return;
+    onProfileSetup(name.trim());
   };
 
   return (

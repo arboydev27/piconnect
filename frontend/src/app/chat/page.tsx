@@ -1,11 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import {
-  users as initialUsers,
-  messages as initialMessages,
-} from "@/components/chat/lib/mock-data";
-import type { User, Message } from "@/components/chat/types/types";
+import { useState, useEffect } from "react";
+import { useUsers } from "@/components/chat/hooks/useUsers";
+import { useChat } from "@/components/chat/hooks/useChat";
+import type { User } from "@/components/chat/types/types";
 import { ChatLayout } from "@/components/chat/chat-layout";
 import ProfileSetup from "@/components/chat/profile-setup";
 import { useToast } from "@/components/chat/hooks/use-toast";
@@ -13,38 +11,52 @@ import Sidebar from "@/components/ui/sidebar";
 
 export default function ChatPage() {
   const { toast } = useToast();
-  const [users, setUsers] = useState<User[]>(initialUsers);
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
+
+  // current user (null until profile created)
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [selectedUser, setSelectedUser] = useState<User>(initialUsers[1]);
 
-  const handleSendMessage = async (text: string) => {
-    if (!currentUser) return;
+  // static mock users + runtime current user
+  const users = useUsers();
 
-    const newMessage: Message = {
-      id: (messages.length + 1).toString(),
-      senderId: currentUser.id,
-      receiverId: selectedUser.id,
-      text,
-      timestamp: new Date(),
-    };
+  // default to first mock peer
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
-    setMessages((prev) => [...prev, newMessage]);
+  // live messages from backend
+  const { msgs: backendMsgs, send } = useChat(
+    currentUser?.id ?? "",
+    selectedUser?.id ?? ""
+  );
+
+  useEffect(() => {
+    if (users.length && currentUser && !selectedUser) {
+      const firstPeer = users.find((u) => u.id !== currentUser.id);
+      if (firstPeer) setSelectedUser(firstPeer);
+    }
+  }, [users, currentUser, selectedUser]);
+
+  const handleProfileSetup = async (name: string) => {
+    try {
+      const res = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json(); // { id: "42" }
+      const newUser: User = {
+        id: data.id,
+        name,
+        avatar: "https://placehold.co/40x40.png",
+        isOnline: true,
+      };
+
+      setCurrentUser(newUser);
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Could not create profile" });
+    }
   };
 
-  const handleProfileSetup = (name: string) => {
-    const newUser: User = {
-      id: "user-current",
-      name,
-      avatar: `https://placehold.co/40x40.png`,
-      isOnline: true,
-    };
-    setCurrentUser(newUser);
-    setUsers((prev) => [newUser, ...prev]);
-    setSelectedUser(users[0]);
-  };
-
-  if (!currentUser) {
+  if (!currentUser || !selectedUser) {
     return (
       <Sidebar>
         <ProfileSetup onProfileSetup={handleProfileSetup} />
@@ -59,14 +71,14 @@ export default function ChatPage() {
           currentUser={currentUser}
           selectedUser={selectedUser}
           users={users.filter((u) => u.id !== currentUser.id)}
-          messages={messages.filter(
-            (m) =>
-              (m.senderId === currentUser.id &&
-                m.receiverId === selectedUser.id) ||
-              (m.senderId === selectedUser.id &&
-                m.receiverId === currentUser.id)
-          )}
-          onSendMessage={handleSendMessage}
+          messages={backendMsgs.map((m) => ({
+            id: m.id.toString(),
+            senderId: m.sender_id,
+            receiverId: m.receiver_id,
+            text: m.text,
+            timestamp: new Date(m.created_at),
+          }))}
+          onSendMessage={send}
           onUserSelect={setSelectedUser}
         />
       </div>

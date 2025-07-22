@@ -11,6 +11,14 @@ import type {
 const TOAST_LIMIT = 1;
 const TOAST_REMOVE_DELAY = 1000000;
 
+export interface ChatRow {
+  id: number;
+  sender_id: string;
+  receiver_id: string;
+  text: string;
+  created_at: string;
+}
+
 type ToasterToast = ToastProps & {
   id: string;
   title?: React.ReactNode;

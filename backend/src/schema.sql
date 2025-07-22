@@ -1,7 +1,28 @@
+-- Users (simple nickname registry)
+CREATE TABLE IF NOT EXISTS users (
+  id          TEXT PRIMARY KEY,
+  nickname    TEXT NOT NULL UNIQUE,
+  created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- new table
+CREATE TABLE IF NOT EXISTS resources (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  filename     TEXT,
+  title        TEXT,
+  description  TEXT,
+  types        TEXT,          -- "pdf,audio"
+  created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS messages (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  text TEXT NOT NULL,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  sender_id    TEXT NOT NULL,
+  receiver_id  TEXT NOT NULL,
+  text         TEXT NOT NULL,
+  created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (sender_id)   REFERENCES users(id),
+  FOREIGN KEY (receiver_id) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS polls (
