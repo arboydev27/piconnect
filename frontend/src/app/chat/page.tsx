@@ -45,7 +45,9 @@ export default function ChatPage() {
       const newUser: User = {
         id: data.id,
         name,
-        avatar: "https://placehold.co/40x40.png",
+        avatar: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(
+          name
+        )}`,
         isOnline: true,
       };
 

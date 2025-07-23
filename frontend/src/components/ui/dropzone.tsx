@@ -18,9 +18,13 @@ interface QueuedFile {
    Component
    ──────────────────────────────────────────────────── */
 export default function Dropzone({
+  section,
+  onUploadComplete,
   onFilesSelected,
   onClose,
 }: {
+  section: "health" | "ed-resources" | "general";
+  onUploadComplete: () => void;
   onFilesSelected?: (f: FileList) => void;
   onClose?: () => void;
 }) {
@@ -55,50 +59,126 @@ export default function Dropzone({
       prev.map((q, i) => (i === index ? { ...q, ...updates } : q))
     );
 
-  /* ─ Upload all (fake) ─ */
-  // const uploadAll = () => {
-  //   setQueue((prev) =>
-  //     prev.map((q) => ({
-  //       ...q,
-  //       uploaded: true,
-  //     }))
-  //   );
-  // };
-  const handleUpload = async () => {
-    if (!queue.length) return;
+  /* ─────────────────────────────
+     MULTI‑UPLOAD helper
+  ───────────────────────────── */
+  const uploadAll = async () => {
+    for (const [idx, meta] of queue.entries()) {
+      if (meta.uploaded) continue;
 
-    const form = new FormData();
-    form.append("file", queue[0].file);
+      // basic validation per item
+      if (
+        !meta.title.trim() ||
+        !meta.description.trim() ||
+        meta.types.length === 0
+      ) {
+        alert(`Fill out title, description and type for ${meta.file.name}`);
+        return;
+      }
+      if (meta.file.size > 20 * 1024 * 1024) {
+        alert(`${meta.file.name} exceeds 20 MB limit.`);
+        return;
+      }
 
-    // ① POST file to backend (/api/upload)
+      /* ① upload binary */
+      const fd = new FormData();
+      fd.append("file", meta.file);
+      const up = await fetch("/api/upload", { method: "POST", body: fd });
+      if (!up.ok) {
+        console.error("Upload failed:", await up.text());
+        alert(`Upload failed for ${meta.file.name}`);
+        return;
+      }
+      const { file: savedName } = await up.json();
 
-    const res = await fetch("/api/upload", {
-      method: "POST",
-      body: form,
-    });
-
-    if (res.ok) {
-      const { file } = await res.json();
-
-      // ② POST metadata to backend (/api/resources) meaning to database
+      /* ② save metadata */
       await fetch("/api/resources", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          filename: file,
-          title: queue[0].title,
-          description: queue[0].description,
-          types: queue[0].types,
+          filename: savedName,
+          title: meta.title,
+          description: meta.description,
+          types: meta.types,
+          section,
         }),
       });
 
+      // mark uploaded & refresh UI
+      updateQueue(idx, { uploaded: true });
+    }
+
+    setUploadSuccess(true);
+    onUploadComplete();
+  };
+
+  const handleUpload = async () => {
+    if (queue.length === 0) return;
+
+    /* ─ Validate first (single‑file mode) ─ */
+    const meta = queue[0];
+    if (
+      !meta.title.trim() ||
+      !meta.description.trim() ||
+      meta.types.length === 0
+    ) {
+      alert("Title, description and at least one type are required.");
+      return;
+    }
+
+    // client‑side size check (20 MB)
+    if (meta.file.size > 20 * 1024 * 1024) {
+      alert("File exceeds 20 MB limit.");
+      return;
+    }
+
+    const form = new FormData();
+    form.append("file", meta.file);
+
+    try {
+      /* ① upload binary */
+      const fileRes = await fetch("/api/upload", {
+        method: "POST",
+        body: form,
+      });
+
+      if (!fileRes.ok) {
+        const msg = await fileRes.text();
+        console.error("Upload failed:", msg);
+        alert(`Upload failed (${fileRes.status}).`);
+        return;
+      }
+
+      const { file: savedName } = await fileRes.json();
+
+      /* ② save metadata */
+      const metaRes = await fetch("/api/resources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: savedName,
+          title: meta.title,
+          description: meta.description,
+          types: meta.types,
+          section,
+        }),
+      });
+
+      if (!metaRes.ok) {
+        console.error("Metadata save failed:", await metaRes.text());
+        alert(`Metadata save failed (${metaRes.status}).`);
+        return;
+      }
+
+      /* success UI */
       setUploadSuccess(true);
-      // flag the first file in the queue as uploaded
       setQueue((prev) =>
         prev.map((q, i) => (i === 0 ? { ...q, uploaded: true } : q))
       );
-    } else {
-      console.error(await res.text());
+      onUploadComplete();
+    } catch (err) {
+      console.error(err);
+      alert("Network error while uploading.");
     }
   };
 
@@ -236,20 +316,18 @@ export default function Dropzone({
         {/* Upload all & back to single */}
         <div className="mt-4 flex gap-4">
           <button
-            onClick={handleUpload}
-            disabled={queue.length === 0}
+            onClick={uploadAll}
+            disabled={queue.length === 0 || queue.every((q) => q.uploaded)}
             className={`flex-1 rounded-lg py-2 text-white ${
               queue.length === 0
                 ? "bg-gray-400 cursor-not-allowed"
-                : uploadSuccess || queue.every((q) => q.uploaded)
+                : queue.every((q) => q.uploaded)
                 ? "bg-green-500"
                 : "bg-blue-600 hover:bg-blue-700" /* ready */
             }`}
             type="button"
           >
-            {uploadSuccess || queue.every((q) => q.uploaded)
-              ? "All Uploaded"
-              : "Upload All"}
+            {queue.every((q) => q.uploaded) ? "All Uploaded" : "Upload All"}
           </button>
 
           <button
@@ -347,13 +425,24 @@ export default function Dropzone({
             onClick={() => {
               handleUpload();
             }}
-            disabled={queue.length === 0 || uploadSuccess}
+            disabled={
+              queue.length === 0 ||
+              uploadSuccess ||
+              (queue.length > 0 &&
+                (!queue[0].title.trim() ||
+                  !queue[0].description.trim() ||
+                  queue[0].types.length === 0))
+            }
             className={`mt-4 w-full rounded-lg px-4 py-2 text-white ${
-              queue.length === 0
-                ? "bg-gray-400 cursor-not-allowed" /* disabled */
-                : uploadSuccess /* success */
+              queue.length === 0 ||
+              (queue.length > 0 &&
+                (!queue[0].title.trim() ||
+                  !queue[0].description.trim() ||
+                  queue[0].types.length === 0))
+                ? "bg-gray-400 cursor-not-allowed"
+                : uploadSuccess
                 ? "bg-green-500"
-                : "bg-blue-600 hover:bg-blue-700" /* ready */
+                : "bg-blue-600 hover:bg-blue-700"
             }`}
           >
             {uploadSuccess ? "Uploaded" : "Upload"}

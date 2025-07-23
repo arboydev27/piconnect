@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 "use client";
 import React, { useState } from "react";
 import {
@@ -9,103 +10,58 @@ import {
 } from "@/components/ui/card";
 import Sidebar from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { FileText, Video, Download, HeartPulse, Plus } from "lucide-react";
+import {
+  FileText,
+  Video,
+  Download,
+  HeartPulse,
+  Plus,
+  Trash,
+} from "lucide-react";
 import Dropzone from "@/components/ui/dropzone";
-
-const healthResources = [
-  {
-    title: "First Aid Guide",
-    description: "Essential first aid procedures for common injuries.",
-    type: "pdf",
-    icon: FileText,
-    category: "Emergency",
-    fileName: "first_aid.pdf",
-  },
-  {
-    title: "Healthy Eating Habits",
-    description: "A video guide to maintaining a balanced diet.",
-    type: "video",
-    icon: Video,
-    category: "Nutrition",
-    fileName: "healthy_eating.mp4",
-  },
-  {
-    title: "Mental Wellness Tips",
-    description: "Strategies for managing stress and anxiety.",
-    type: "pdf",
-    icon: FileText,
-    category: "Mental Health",
-    fileName: "mental_wellness.pdf",
-  },
-  {
-    title: "Basic Hygiene Practices",
-    description: "Information on staying clean and healthy.",
-    type: "pdf",
-    icon: FileText,
-    category: "Hygiene",
-    fileName: "hygiene.pdf",
-  },
-  {
-    title: "Basic CPR Techniques",
-    description: "Learn how to perform CPR in emergencies.",
-    type: "pdf",
-    icon: FileText,
-    category: "Emergency",
-    fileName: "cpr_techniques.pdf",
-  },
-  {
-    title: "Local Health Services",
-    description: "A guide to local clinics and health services.",
-    type: "pdf",
-    icon: FileText,
-    category: "Resources",
-    fileName: "local_health_services.pdf",
-  },
-  {
-    title: "Vaccination Information",
-    description: "Details on available vaccinations in the community.",
-    type: "pdf",
-    icon: FileText,
-    category: "Health",
-    fileName: "vaccination_info.pdf",
-  },
-  {
-    title: "Community Health Events",
-    description: "Upcoming health events and workshops in the area.",
-    type: "pdf",
-    icon: FileText,
-    category: "Events",
-    fileName: "community_health_events.pdf",
-  },
-];
+import { useResources } from "@/components/chat/hooks/useResources";
 
 function ResourceCard({
+  id,
   title,
   description,
   icon: Icon,
   fileName,
+  onDelete,
 }: {
+  id: number;
   title: string;
   description: string;
   icon: React.ElementType;
   fileName: string;
+  onDelete: (id: number) => void;
 }) {
   return (
-    <Card className="bg-[#FFFFFF]">
-      <CardHeader className="grid grid-cols-[1fr_auto] items-start gap-4 space-y-0">
+    <Card className="bg-[#FFFFFF] flex flex-col h-full">
+      <CardHeader className="grid grid-cols-[1fr_auto] items-start gap-4 space-y-0 relative flex-1">
         <div className="space-y-1">
-          <CardTitle className="text-[#353B41]">{title}</CardTitle>
-          <CardDescription className="text-[#64748B]">
+          <CardTitle className="text-[#353B41] line-clamp-2 min-h-[3rem] break-all">
+            {title}
+          </CardTitle>
+          <CardDescription className="text-[#64748B] line-clamp-3">
             {description}
           </CardDescription>
         </div>
         <div className="flex items-center justify-center w-12 h-12 text-accent-foreground rounded-full bg-soft-purple bg-[#F1F5F9]">
           <Icon className="w-6 h-6 text-[#353B41]" />
         </div>
+        {/* Delete button */}
+        <button
+          onClick={() => onDelete(id)}
+          className="absolute top-2 right-2 p-1 rounded-full hover:bg-gray-100"
+          title="Delete"
+        >
+          <Trash className="w-4 h-4 text-red-600" />
+        </button>
       </CardHeader>
-      <CardContent>
+      <CardContent className="mt-auto">
         <Button size="sm" className="w-full bg-[#0D6DFD]" asChild>
-          <a href={`/resources/health/${fileName}`} download>
+          <a href={`/uploads/${encodeURIComponent(fileName)}`} download>
             <Download className="mr-2 h-4 w-4" />
             Download
           </a>
@@ -117,6 +73,7 @@ function ResourceCard({
 
 const HealthPage = () => {
   const [showDropzone, setShowDropzone] = useState(false);
+  const { items: resources, refresh } = useResources("health");
 
   return (
     <Sidebar>
@@ -145,16 +102,45 @@ const HealthPage = () => {
             </button>
           </div>
         </div>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {healthResources.map((res) => (
-            <ResourceCard key={res.title} {...res} />
-          ))}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 auto-rows-fr">
+          {resources.length === 0 ? (
+            <p>No health resources yet.</p>
+          ) : (
+            resources.map((r) => (
+              <ResourceCard
+                id={r.id}
+                key={r.id}
+                title={r.title}
+                description={r.description}
+                icon={r.types.includes("video") ? Video : FileText}
+                fileName={r.filename}
+                onDelete={async (id) => {
+                  const res = await fetch(`/api/resources/${id}`, {
+                    method: "DELETE",
+                  });
+                  if (res.ok) {
+                    refresh();
+                  } else {
+                    console.error(await res.text());
+                    alert("Failed to delete.");
+                  }
+                }}
+              />
+            ))
+          )}
         </div>
       </div>
       {showDropzone && (
-        <div className="fixed inset-0 z-50 flex items-center jsutify-center bg-black/50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="relative">
-            <Dropzone onClose={() => setShowDropzone(false)} />
+            <Dropzone
+              section="health"
+              onClose={() => setShowDropzone(false)}
+              onUploadComplete={() => {
+                setShowDropzone(false);
+                refresh();
+              }}
+            />
           </div>
         </div>
       )}

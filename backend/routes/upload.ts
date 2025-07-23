@@ -20,12 +20,12 @@ const storage = multer.diskStorage({
 const upload = multer({
     storage,
     limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB limit
-    fileFilter: (_req, file, cb) => {
-        const ok = ["application/pdf", "video/", "audio/"].some((t) =>
-            file.mimetype.startsWith(t)
-    );
-    cb(null, ok);
-    },
+    // fileFilter: (_req, file, cb) => {
+    //     const ok = ["application/pdf", "video/", "audio/"].some((t) =>
+    //         file.mimetype.startsWith(t)
+    // );
+    // cb(null, ok);
+    // },
 });
 
 const router = Router();
